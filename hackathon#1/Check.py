@@ -303,3 +303,26 @@ for chunk in pd.read_csv(
         print(outage["method"].value_counts())
 
         break
+
+TOP_IP = Counter()
+TOP_ENDPOINT = Counter()
+
+for chunk in pd.read_csv(
+        LOG_FILE,
+        sep="|",
+        header=None,
+        names=cols,
+        usecols=[0,1,2,3,4,5],
+        chunksize=500000):
+
+    TOP_IP.update(chunk["ip"].astype(str).str.strip())
+
+    TOP_ENDPOINT.update(
+        chunk["endpoint"].astype(str).str.strip()
+    )
+
+print("\nTOP 20 IP")
+print(TOP_IP.most_common(20))
+
+print("\nTOP 20 ENDPOINT")
+print(TOP_ENDPOINT.most_common(20))
