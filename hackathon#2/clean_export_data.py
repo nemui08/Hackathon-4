@@ -1,36 +1,39 @@
 import pandas as pd
 
 # --- 1. Load Data ---
-# Skip the first row ('sep=,')
 df = pd.read_csv('Export.csv', skiprows=1)
 
-# Convert 'Time' column to datetime format
-df['Time'] = pd.to_datetime(df['Time'])
+# แปลงเวลา
+df['Time'] = pd.to_datetime(df['Time'], errors='coerce')
 
-# --- 2. Handle Missing Values ---
-# Drop rows if all sensor columns (Sensor 1-8) are empty
+# --- 2. เลือกคอลัมน์ sensor ---
 sensor_cols = [f'Sensor {i}' for i in range(1, 9)]
-df_cleaned = df.dropna(subset=sensor_cols, how='all')
 
-# Use interpolate for missing numbers (sensors and weather)
-df_cleaned = df_cleaned.interpolate(method='linear', numeric_only=True)
+# บังคับให้ sensor เป็นตัวเลข (กัน string / N/A / ช่องว่าง)
+df[sensor_cols] = df[sensor_cols].apply(pd.to_numeric, errors='coerce')
 
-# Use forward fill (ffill) for text column (Smell Prediction)
-if 'Smell Prediction' in df_cleaned.columns:
-    df_cleaned['Smell Prediction'] = df_cleaned['Smell Prediction'].ffill()
+# --- 3. ลบแถวที่ sensor ว่างหมด ---
+df = df.dropna(subset=sensor_cols, how='all')
 
-# --- 3. Remove Duplicates ---
-# Drop duplicate rows based on 'Time' and keep the first one
-df_cleaned = df_cleaned.drop_duplicates(subset=['Time'], keep='first')
+# --- 4. Interpolate เฉพาะตัวเลข ---
+num_cols = df.select_dtypes(include='number').columns
+df[num_cols] = df[num_cols].interpolate(method='linear')
 
-# --- 4. Sort and Save ---
-# Sort data by 'Time'
-df_cleaned = df_cleaned.sort_values(by='Time').reset_index(drop=True)
+# --- 5. เติมค่าข้อความ (เช่น Smell Prediction) ---
+if 'Smell Prediction' in df.columns:
+    df['Smell Prediction'] = df['Smell Prediction'].ffill()
 
-# Drop 'D/T' column if we don't need it
-if 'D/T' in df_cleaned.columns:
-    df_cleaned = df_cleaned.drop(columns=['D/T'])
+# --- 6. ลบ duplicate ---
+df = df.drop_duplicates(subset=['Time'], keep='first')
 
-# Save to a new CSV file
-df_cleaned.to_csv('Export_Cleaned.csv', index=False)
-print("Data cleaning is done! 🎉 Saved to 'Export_Cleaned.csv'")
+# --- 7. เรียงเวลา ---
+df = df.sort_values(by='Time').reset_index(drop=True)
+
+# --- 8. ลบคอลัมน์ไม่จำเป็น ---
+if 'D/T' in df.columns:
+    df = df.drop(columns=['D/T'])
+
+# --- 9. เซฟไฟล์ ---
+df.to_csv('Export_Cleaned.csv', index=False)
+
+print("Data cleaning done! 🎉 Saved to Export_Cleaned.csv")
