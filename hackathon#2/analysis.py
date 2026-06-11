@@ -1,93 +1,406 @@
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import json
+from pathlib import Path
 
-# --- Load cleaned data ---
-df = pd.read_csv("Export_Cleaned.csv")
+# ==================================================
+# LOAD DATA
+# ==================================================
 
-# แปลงเวลา
-df["Time"] = pd.to_datetime(df["Time"])
+BASE_DIR = Path(__file__).resolve().parent
 
-# sensor columns
-sensor_cols = [f"Sensor {i}" for i in range(1, 9)]
+DATA_PATH = BASE_DIR / "cleaned_odor_data.csv"
 
-# =========================
-# 📊 1. LINE PLOT (trend ตามเวลา)
-# =========================
-plt.figure()
-for col in sensor_cols:
-    plt.plot(df["Time"], df[col], label=col)
+print("Loading data...")
 
-plt.title("Sensor Trend Over Time")
-plt.legend()
-plt.xticks(rotation=45)
-plt.tight_layout()
-plt.show()
+df = pd.read_csv(DATA_PATH)
 
+# ==================================================
+# TIME CONVERSION
+# ==================================================
 
-# =========================
-# 📊 2. BAR (ค่าเฉลี่ยแต่ละ sensor)
-# =========================
-plt.figure()
-df[sensor_cols].mean().plot(kind="bar")
-plt.title("Average Sensor Values")
-plt.ylabel("Value")
-plt.tight_layout()
-plt.show()
+df["Time"] = pd.to_datetime(
+    df["Time"],
+    errors="coerce"
+)
 
+df = df.dropna(subset=["Time"])
 
-# =========================
-# 📊 3. HISTOGRAM (distribution)
-# =========================
-plt.figure()
-df[sensor_cols].hist(bins=30, figsize=(12,6))
-plt.suptitle("Sensor Distribution")
-plt.tight_layout()
-plt.show()
+print(f"Rows loaded: {len(df):,}")
 
+# ==================================================
+# D/T CHECK
+# ==================================================
 
-# =========================
-# 📊 4. BOX PLOT (ดู outlier)
-# =========================
-plt.figure()
-sns.boxplot(data=df[sensor_cols])
-plt.title("Sensor Outliers")
-plt.xticks(rotation=45)
-plt.show()
+if "D/T" not in df.columns:
+    raise ValueError(
+        "Column 'D/T' not found."
+    )
 
+print("\nD/T Statistics")
+print(df["D/T"].describe())
 
-# =========================
-# 📊 5. SCATTER (ความสัมพันธ์)
-# เช่น Sensor1 vs Sensor2
-# =========================
-plt.figure()
-plt.scatter(df["Sensor 1"], df["Sensor 2"], alpha=0.5)
-plt.title("Sensor1 vs Sensor2 Relationship")
-plt.xlabel("Sensor 1")
-plt.ylabel("Sensor 2")
-plt.show()
+# ==================================================
+# DYNAMIC ODOR THRESHOLD
+# ==================================================
 
+ODOR_THRESHOLD = df["D/T"].quantile(0.95)
 
-# =========================
-# 📊 6. GROUPED (Smell Prediction vs sensor avg)
-# =========================
-if "Smell Prediction" in df.columns:
-    grouped = df.groupby("Smell Prediction")[sensor_cols].mean()
+print(
+    f"\nOdor Incident Threshold (95th percentile): "
+    f"{ODOR_THRESHOLD:.2f}"
+)
 
-    grouped.plot(kind="bar", figsize=(10,5))
-    plt.title("Average Sensors by Smell Category")
-    plt.ylabel("Value")
-    plt.xticks(rotation=45)
+# ==================================================
+# INCIDENT FLAG
+# ==================================================
+
+df["Odor_Incident"] = np.where(
+    df["D/T"] >= ODOR_THRESHOLD,
+    "Odor",
+    "Normal"
+)
+
+incident_df = df[
+    df["D/T"] >= ODOR_THRESHOLD
+].copy()
+
+print(
+    f"Odor Incident Rows: "
+    f"{len(incident_df):,}"
+)
+
+# ==================================================
+# COMMUNITY RISK INDEX
+# ==================================================
+
+def community_risk(row):
+
+    score = 0
+
+    if row["D/T"] >= ODOR_THRESHOLD:
+        score += 3
+
+    if (
+        "Relative Humidity" in df.columns
+        and row["Relative Humidity"] > 80
+    ):
+        score += 1
+
+    if (
+        "Wind Speed" in df.columns
+        and row["Wind Speed"] < 2
+    ):
+        score += 1
+
+    if score >= 5:
+        return "Red"
+
+    elif score >= 3:
+        return "Yellow"
+
+    return "Green"
+
+df["Community_Risk"] = df.apply(
+    community_risk,
+    axis=1
+)
+
+# ==================================================
+# PEAK INCIDENT TIMELINES
+# ==================================================
+
+incident_df["Hour"] = (
+    incident_df["Time"].dt.hour
+)
+
+peak_hours = (
+    incident_df.groupby("Hour")
+    .size()
+    .sort_values(ascending=False)
+)
+
+print("\n========== PEAK INCIDENT HOURS ==========")
+
+if len(peak_hours) > 0:
+
+    print(peak_hours.head(10))
+
+    plt.figure(figsize=(10, 5))
+
+    peak_hours.sort_index().plot(
+        kind="bar"
+    )
+
+    plt.title(
+        "Peak Incident Hours"
+    )
+
+    plt.xlabel(
+        "Hour of Day"
+    )
+
+    plt.ylabel(
+        "Incident Count"
+    )
+
     plt.tight_layout()
-    plt.show()
 
+    plt.savefig(
+        BASE_DIR / "peak_incident_hours.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
 
-# =========================
-# 📊 7. STACKED BAR (composition)
-# =========================
-top = df.head(10)[sensor_cols]
+    plt.close()
 
-top.plot(kind="bar", stacked=True, figsize=(12,6))
-plt.title("Stacked Sensor Values (First 10 rows)")
-plt.tight_layout()
-plt.show()
+# ==================================================
+# SENSOR 3 / SENSOR 5 BOXPLOT
+# ==================================================
+
+if (
+    "Sensor 3" in df.columns
+    and "Sensor 5" in df.columns
+):
+
+    fig, axes = plt.subplots(
+        1,
+        2,
+        figsize=(12, 5)
+    )
+
+    sns.boxplot(
+        data=df,
+        x="Odor_Incident",
+        y="Sensor 3",
+        ax=axes[0]
+    )
+
+    axes[0].set_title(
+        "Sensor 3 Response"
+    )
+
+    sns.boxplot(
+        data=df,
+        x="Odor_Incident",
+        y="Sensor 5",
+        ax=axes[1]
+    )
+
+    axes[1].set_title(
+        "Sensor 5 Response"
+    )
+
+    plt.tight_layout()
+
+    plt.savefig(
+        BASE_DIR / "sensor_key_drivers.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
+
+    plt.close()
+
+# ==================================================
+# CORRELATION HEATMAP
+# ==================================================
+
+corr_cols = [
+    "D/T",
+    "Sensor 3",
+    "Sensor 5",
+    "Wind Speed",
+    "Temperature",
+    "Relative Humidity",
+    "PM 2.5"
+]
+
+corr_cols = [
+    c for c in corr_cols
+    if c in incident_df.columns
+]
+
+if len(corr_cols) > 1:
+
+    corr_matrix = (
+        incident_df[corr_cols]
+        .corr()
+    )
+
+    plt.figure(
+        figsize=(10, 8)
+    )
+
+    sns.heatmap(
+        corr_matrix,
+        annot=True,
+        cmap="coolwarm",
+        fmt=".2f"
+    )
+
+    plt.title(
+        "Correlation Matrix During Odor Incidents"
+    )
+
+    plt.tight_layout()
+
+    plt.savefig(
+        BASE_DIR / "incident_correlation.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
+
+    plt.close()
+
+# ==================================================
+# WIND ANALYSIS
+# ==================================================
+
+worst_wind = "Unknown"
+
+if "Wind Direction" in incident_df.columns:
+
+    bins = [
+        0,45,90,135,
+        180,225,270,
+        315,360
+    ]
+
+    labels = [
+        "N","NE","E","SE",
+        "S","SW","W","NW"
+    ]
+
+    incident_df["Wind_Sector"] = pd.cut(
+        incident_df["Wind Direction"],
+        bins=bins,
+        labels=labels,
+        include_lowest=True
+    )
+
+    if len(incident_df) > 0:
+
+        worst_wind = str(
+            incident_df["Wind_Sector"]
+            .mode()[0]
+        )
+
+# ==================================================
+# RISK SUMMARY CSV
+# ==================================================
+
+risk_export = df[
+    [
+        "Time",
+        "D/T",
+        "Community_Risk"
+    ]
+]
+
+risk_export.to_csv(
+    BASE_DIR / "Community_Risk_Index.csv",
+    index=False
+)
+
+# ==================================================
+# INSIGHT SUMMARY JSON
+# ==================================================
+
+summary = {
+
+    "Threshold_D_T": float(
+        ODOR_THRESHOLD
+    ),
+
+    "Incident_Count": int(
+        len(incident_df)
+    ),
+
+    "Risk_Distribution":
+
+        df["Community_Risk"]
+        .value_counts()
+        .to_dict(),
+
+    "Top_Peak_Hours":
+
+        peak_hours.head(5)
+        .index.tolist(),
+
+    "Worst_Wind_Direction":
+
+        worst_wind
+}
+
+if (
+    "Wind Speed" in incident_df.columns
+    and len(incident_df) > 0
+):
+    summary[
+        "Average_Wind_Speed"
+    ] = round(
+        float(
+            incident_df["Wind Speed"]
+            .mean()
+        ),
+        2
+    )
+
+if (
+    "Relative Humidity"
+    in incident_df.columns
+    and len(incident_df) > 0
+):
+    summary[
+        "Average_Humidity"
+    ] = round(
+        float(
+            incident_df[
+                "Relative Humidity"
+            ].mean()
+        ),
+        2
+    )
+
+if (
+    "Temperature"
+    in incident_df.columns
+    and len(incident_df) > 0
+):
+    summary[
+        "Average_Temperature"
+    ] = round(
+        float(
+            incident_df[
+                "Temperature"
+            ].mean()
+        ),
+        2
+    )
+
+with open(
+    BASE_DIR / "Insight_Summary.json",
+    "w"
+) as f:
+
+    json.dump(
+        summary,
+        f,
+        indent=4
+    )
+
+# ==================================================
+# FILE SUMMARY
+# ==================================================
+
+print("\n========== FILES GENERATED ==========")
+
+print("peak_incident_hours.png")
+print("sensor_key_drivers.png")
+print("incident_correlation.png")
+print("Community_Risk_Index.csv")
+print("Insight_Summary.json")
+
+print("\nAnalysis Complete ✅")
