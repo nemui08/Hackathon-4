@@ -1,7 +1,7 @@
 import pandas as pd
 
 # --- Load data ---
-df = pd.read_csv("Export_Cleaned.csv")
+df = pd.read_csv("cleaned_odor_data.csv")
 
 # --- Parse time ---
 df["Time"] = pd.to_datetime(df["Time"])
@@ -12,19 +12,21 @@ sensor_cols = [f"Sensor {i}" for i in range(1, 9)]
 # --- บังคับเป็นตัวเลข ---
 df[sensor_cols] = df[sensor_cols].apply(pd.to_numeric, errors="coerce")
 
-# --- สร้างคอลัมน์เดือน ---
-df["Month"] = df["Time"].dt.to_period("M")
+# --- สร้างคอลัมน์ WEEK ---
+df["Week"] = df["Time"].dt.to_period("W").astype(str)
 
 # =========================
-# 📊 ค่าเฉลี่ยรายเดือน
+# 📊 ค่าเฉลี่ยรายสัปดาห์
 # =========================
-monthly_mean = df.groupby("Month")[sensor_cols].mean()
+weekly_mean = df.groupby("Week")[sensor_cols].mean()
 
-print(monthly_mean)
+# --- ลดทศนิยม ---
+weekly_mean = weekly_mean.round(2)
 
 # =========================
-# 💾 save ไฟล์ (สำคัญมากสำหรับส่งงาน)
+# 💾 SAVE ทับไฟล์เดิม
 # =========================
-monthly_mean.to_csv("sensor_monthly_mean.csv")
+weekly_mean.to_csv("sensor_monthly_mean.csv", index=True)
 
-print("\nSaved: sensor_monthly_mean.csv 🎉")
+print("Saved (weekly but overwritten file): sensor_monthly_mean.csv 🎉")
+print(weekly_mean.head())
