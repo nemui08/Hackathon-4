@@ -1,29 +1,35 @@
 import pandas as pd
 
 # --- Load data ---
-df = pd.read_csv("Export_Cleaned.csv")
+df = pd.read_csv("cleaned_odor_data.csv")
 
-# --- Parse time ---
+# --- datetime ---
 df["Time"] = pd.to_datetime(df["Time"])
 
-# --- Convert numeric ---
-df["Wind Speed"] = pd.to_numeric(df["Wind Speed"], errors="coerce")
-df["PM 2.5"] = pd.to_numeric(df["PM 2.5"], errors="coerce")
+# --- numeric convert ---
+cols = ["D/T", "Wind Speed", "PM 2.5"]
+df[cols] = df[cols].apply(pd.to_numeric, errors="coerce")
 
-# --- Clean rows ---
-df = df.dropna(subset=["Time", "Wind Speed", "PM 2.5"])
-
-# --- Create date ---
-df["Date"] = df["Time"].dt.date
+df = df.dropna(subset=cols)
 
 # =========================
-# 📊 DAILY AVERAGE (2 variables only)
+# 📅 WEEKLY GROUP
 # =========================
-daily = df.groupby("Date")[["Wind Speed", "PM 2.5"]].mean()
+df["Week"] = df["Time"].dt.to_period("W").astype(str)
 
-print(daily)
+weekly = df.groupby("Week")[cols].mean().reset_index()
 
-# --- save ---
-daily.to_csv("daily_wind_pm.csv")
+# =========================
+# ✨ CLEAN FORMAT (ลดทศนิยม)
+# =========================
+weekly["D/T"] = weekly["D/T"].round(2)
+weekly["Wind Speed"] = weekly["Wind Speed"].round(2)
+weekly["PM 2.5"] = weekly["PM 2.5"].round(2)
 
-print("\nSaved: daily_wind_pm.csv 🎉")
+# =========================
+# 💾 SAVE
+# =========================
+weekly.to_csv("weekly_summary.csv", index=False)
+
+print("Saved: weekly_summary.csv 🎉")
+print(weekly.head())
