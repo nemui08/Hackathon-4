@@ -46,7 +46,7 @@ plt.title("Total Incident Duration (Minutes) Accumulated by Hour", fontsize=14, 
 plt.xlabel("Hour of Day (0-23)", fontsize=12)
 plt.ylabel("Duration Count (Minutes)", fontsize=12)
 plt.tight_layout()
-plt.savefig('hackathon#2/peak_incident_hours.png', dpi=300)
+plt.savefig('hackathon#2/peak_incident_hours_sup.png', dpi=300)
 plt.show()
 
 # Graph B: Feature Discrepancy Boxplot (Sensor 3 & Sensor 5 Key Drivers)
@@ -58,7 +58,7 @@ sns.boxplot(data=df, x='Smell Prediction', y='Sensor 5', ax=axes[1], palette="Se
 axes[1].set_title("Sensor 5 Response Profile", fontsize=12, fontweight='bold')
 plt.suptitle("Gas Sensor Behavior: Normal Air vs Odor Incident", fontsize=14, fontweight='bold')
 plt.tight_layout()
-plt.savefig('hackathon#2/sensor_key_drivers.png', dpi=300)
+plt.savefig('hackathon#2/sensor_key_driv_sup.png', dpi=300)
 plt.show()
 
 # Graph C: Correlation Matrix During Odor Incidents
@@ -67,7 +67,7 @@ incident_df = df[df['Smell Prediction'] == 'Odor_Incident'][core_features]
 sns.heatmap(incident_df.corr(), annot=True, cmap="coolwarm", fmt=".2f", linewidths=0.5)
 plt.title("Weather & Key Sensor Correlation Matrix (During Incidents)", fontsize=12, fontweight='bold')
 plt.tight_layout()
-plt.savefig('hackathon#2/incident_correlation.png', dpi=300)
+plt.savefig('hackathon#2/incident_sup.png', dpi=300)
 plt.show()
 
 print("\n🎉 Analytics code execution finished successfully. Output graphs saved in hackathon#2 folder.")
