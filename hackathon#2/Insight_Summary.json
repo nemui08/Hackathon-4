@@ -1,0 +1,20 @@
+{
+    "Threshold_D_T": 4.76,
+    "Incident_Count": 6460,
+    "Risk_Distribution": {
+        "Green": 121918,
+        "Yellow": 5254,
+        "Red": 1206
+    },
+    "Top_Peak_Hours": [
+        7,
+        8,
+        6,
+        5,
+        9
+    ],
+    "Worst_Wind_Direction": "S",
+    "Average_Wind_Speed": 0.85,
+    "Average_Humidity": 71.66,
+    "Average_Temperature": 30.4
+}
